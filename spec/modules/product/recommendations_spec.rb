@@ -99,4 +99,31 @@ describe Product::Recommendations, :elasticsearch_wait_for_refresh do
       expect(@product.recommendable_reasons.values).to all(be true)
     end
   end
+
+  context "when product has no sales" do
+    before do
+      allow(@product).to receive(:sales).and_return(double(exists?: false))
+    end
+
+    it "is false due to has_sales" do
+      expect(@product.recommendable_reasons[:has_sales]).to be(false)
+      expect(@product.recommendable_reasons.except(:has_sales).values).to all(be true)
+      expect(@product.recommendable?).to be(false)
+    end
+  end
+
+  context "when user is not compliant" do
+    before do
+      @non_compliant_user = create(:user, name: "Non-compliant user")
+      allow(@non_compliant_user).to receive(:compliant?).and_return(false)
+      @product = create(:product, user: @non_compliant_user, taxonomy: create(:taxonomy))
+      create(:purchase, :with_review, link: @product, created_at: 1.week.ago)
+    end
+
+    it "is false due to risk_verified" do
+      expect(@product.recommendable_reasons[:risk_verified]).to be(false)
+      expect(@product.recommendable_reasons.except(:risk_verified).values).to all(be true)
+      expect(@product.recommendable?).to be(false)
+    end
+  end
 end
