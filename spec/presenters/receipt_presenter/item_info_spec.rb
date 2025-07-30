@@ -622,7 +622,7 @@ describe ReceiptPresenter::ItemInfo do
 
           context "when the purchase is a gift sender purchase" do
             it "returns gift subscription note" do
-              note = "Note that giftee@gumroad.com’s membership will not automatically renew."
+              note = "Note that giftee@gumroad.com's membership will not automatically renew."
               expect(props[:manage_subscription_note]).to eq(note)
             end
           end
@@ -634,6 +634,53 @@ describe ReceiptPresenter::ItemInfo do
 
             it "returns nil" do
               expect(props[:manage_subscription_note]).to be_nil
+            end
+          end
+        end
+
+        context "when the subscription is an installment plan" do
+          before do
+            purchase.subscription.update!(charge_occurrence_count: 3)
+          end
+
+          context "when it's not the final payment" do
+            it "returns installment plan note with initiation and final dates" do
+              url = Rails.application.routes.url_helpers.manage_subscription_url(
+                purchase.subscription.external_id,
+                host: UrlService.domain_with_protocol,
+              )
+              initiation_date = purchase.subscription.original_purchase.created_at.to_fs(:formatted_date_abbrev_month)
+              final_charge_date = purchase.subscription.original_purchase.created_at + (purchase.subscription.period * 3)
+              final_date = final_charge_date.to_fs(:formatted_date_abbrev_month)
+
+              expect(props[:manage_subscription_note]).to eq(
+                "Installment plan initiated on #{initiation_date}. Your final charge will be on #{final_date}. You can manage your payment settings " \
+                "<a target=\"_blank\" href=\"#{url}\">here</a>."
+              )
+            end
+          end
+
+          context "when it's the final payment" do
+            before do
+              2.times do |i|
+                create(:purchase,
+                       link: product,
+                       subscription: purchase.subscription,
+                       seller: product.user,
+                       purchase_state: "successful",
+                       created_at: purchase.created_at + (i + 1).months
+                )
+              end
+            end
+
+            it "returns final payment note with payment history and total" do
+              purchase.subscription.reload
+
+              expected_note = props[:manage_subscription_note]
+              expect(expected_note).to include("This is your final payment for your installment plan")
+              expect(expected_note).to include("You will not be charged again")
+              expect(expected_note).to include("Payment history:")
+              expect(expected_note).to include("Total amount paid:")
             end
           end
         end
