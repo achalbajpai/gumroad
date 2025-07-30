@@ -191,12 +191,12 @@ class Subscription < ApplicationRecord
 
   def price
     payment_option = last_payment_option || fetch_last_payment_option
-    payment_option.price
+    payment_option&.price
   end
 
   def current_subscription_price_cents
     if is_installment_plan
-      original_purchase.minimum_paid_price_cents
+      original_purchase.displayed_price_cents
     else
       discount_applies_to_next_charge? ?
         original_purchase.displayed_price_cents :
@@ -617,9 +617,9 @@ class Subscription < ApplicationRecord
 
   def recurrence
     if is_installment_plan
-      last_payment_option.installment_plan.recurrence
+      last_payment_option&.installment_plan&.recurrence || "monthly"
     else
-      price.recurrence
+      price&.recurrence || "monthly"
     end
   end
 
@@ -848,6 +848,8 @@ class Subscription < ApplicationRecord
 
   def discount_applies_to_next_charge?
     return true if is_installment_plan
+
+    return true if original_purchase.nil?
 
     duration_in_billing_cycles = original_purchase.purchase_offer_code_discount&.duration_in_billing_cycles
     return true if duration_in_billing_cycles.blank?
