@@ -257,8 +257,31 @@ class ReceiptPresenter::ItemInfo
         return if purchase.is_gift_receiver_purchase && subscription.credit_card_id.blank?
         return gift_subscription_renewal_note if subscription.gift? && subscription.credit_card_id.blank?
 
-        "You will be charged once #{recurrence_long_indicator(subscription.recurrence)}. If you would like to manage your membership you can visit #{link_to(
-            "subscription settings",
+        if subscription.has_fixed_length?
+          installment_plan_note
+        else
+          "You will be charged once #{recurrence_long_indicator(subscription.recurrence)}. If you would like to manage your membership you can visit #{link_to(
+              "subscription settings",
+              Rails.application.routes.url_helpers.manage_subscription_url(
+                subscription.external_id,
+                { host: UrlService.domain_with_protocol },
+              ),
+              target: "_blank"
+            )}.".html_safe
+        end
+      end
+    end
+
+    def installment_plan_note
+      if subscription.charges_completed?
+        installment_final_payment_note
+      else
+        initiation_date = subscription.original_purchase.created_at.to_fs(:formatted_date_abbrev_month)
+        final_charge_date = subscription.original_purchase.created_at + (subscription.period * subscription.charge_occurrence_count)
+        final_date = final_charge_date.to_fs(:formatted_date_abbrev_month)
+
+        "Installment plan initiated on #{initiation_date}. Your final charge will be on #{final_date}. You can manage your payment settings #{link_to(
+            "here",
             Rails.application.routes.url_helpers.manage_subscription_url(
               subscription.external_id,
               { host: UrlService.domain_with_protocol },
@@ -268,7 +291,19 @@ class ReceiptPresenter::ItemInfo
       end
     end
 
+    def installment_final_payment_note
+      successful_purchases = subscription.purchases.successful.order(:created_at)
+      payment_history = successful_purchases.map do |p|
+        "#{p.created_at.to_fs(:formatted_date_abbrev_month)} - #{p.formatted_total_display_price_per_unit}"
+      end.join(", ")
+
+      total_amount = successful_purchases.sum(&:displayed_price_cents)
+      total_formatted = format_just_price_in_cents(total_amount, successful_purchases.first.displayed_price_currency_type)
+
+      "This is your final payment for your installment plan. You will not be charged again. Payment history: #{payment_history}. Total amount paid: #{total_formatted}.".html_safe
+    end
+
     def gift_subscription_renewal_note
-      "Note that #{purchase.giftee_name_or_email}’s membership will not automatically renew."
+      "Note that #{purchase.giftee_name_or_email}'s membership will not automatically renew."
     end
 end
