@@ -259,25 +259,52 @@ describe ReceiptPresenter::PaymentInfo do
               purchase.subscription.update!(charge_occurrence_count: 2)
             end
 
-            it "returns today's payment attributes" do
+            it "returns today's payment attributes with installment numbering" do
               purchase.subscription.original_purchase.reload
               expect(today_payment_attributes).to eq(
                 [
-                  { label: "Today's payment", value: nil },
+                  { label: "Today's payment: 1 of 2", value: nil },
                   { label: "Membership product", value: "$19.98" },
                   { label: nil, value: link_to("Generate invoice", invoice_url) },
                 ]
               )
             end
 
-            it "returns upcoming payment attributes" do
+            it "returns upcoming payment attributes with installment numbering" do
               purchase.subscription.original_purchase.reload
               expect(upcoming_payment_attributes).to eq(
                 [
-                  { label: "Upcoming payment", value: nil },
+                  { label: "Upcoming payment: 2 of 2", value: nil },
                   { label: "Membership product", value: "$19.98 on Feb 1, 2023" },
                 ]
               )
+            end
+
+            context "when there are 3 total installments" do
+              before do
+                purchase.subscription.update!(charge_occurrence_count: 3)
+              end
+
+              it "returns correct numbering for today's payment" do
+                purchase.subscription.original_purchase.reload
+                expect(today_payment_attributes).to eq(
+                  [
+                    { label: "Today's payment: 1 of 3", value: nil },
+                    { label: "Membership product", value: "$19.98" },
+                    { label: nil, value: link_to("Generate invoice", invoice_url) },
+                  ]
+                )
+              end
+
+              it "returns correct numbering for upcoming payment" do
+                purchase.subscription.original_purchase.reload
+                expect(upcoming_payment_attributes).to eq(
+                  [
+                    { label: "Upcoming payment: 2 of 3", value: nil },
+                    { label: "Membership product", value: "$19.98 on Feb 1, 2023" },
+                  ]
+                )
+              end
             end
           end
 
